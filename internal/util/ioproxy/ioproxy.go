@@ -1,7 +1,11 @@
 package ioproxy
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
+	"github.com/joyrex2001/kubedock/internal/util/ioutil"
 	"io"
 	"k8s.io/klog"
 	"sync"
@@ -55,14 +59,11 @@ func (w *IoProxy) Write(p []byte) (int, error) {
 }
 
 func (w *IoProxy) writeAll(writer io.Writer, buf []byte) error {
-	for len(buf) > 0 {
-		n, err := writer.Write(buf)
-		if err != nil {
-			return err
-		}
-		buf = buf[n:]
+	n, err := io.Copy(ioutil.NewRetryWriter(writer), bytes.NewReader(buf))
+	if n < int64(len(buf)) {
+		return errors.Join(fmt.Errorf("ioproxy: wrote %d bytes instead of the expected %d bytes", n, len(buf)), err)
 	}
-	return nil
+	return err
 }
 
 // process will go through the buffer and writes chunks that end with
@@ -85,12 +86,12 @@ func (w *IoProxy) write(p []byte) error {
 	binary.BigEndian.PutUint32(header[4:], uint32(len(p)))
 	err := w.writeAll(w.out, header[:])
 	if err != nil {
-		klog.Errorf("Error when writing docker log header: %v", err)
+		klog.V(2).Infof("Error when writing docker log header: %v", err)
 		return err
 	}
 	err = w.writeAll(w.out, p)
 	if err != nil {
-		klog.Errorf("Error ehen writing docker log content: %v", err)
+		klog.V(2).Infof("Error ehen writing docker log content: %v", err)
 	}
 	return err
 }

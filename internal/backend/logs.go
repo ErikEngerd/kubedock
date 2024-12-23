@@ -1,7 +1,9 @@
 package backend
 
 import (
+	"bytes"
 	"context"
+	"github.com/joyrex2001/kubedock/internal/util/ioutil"
 	"io"
 	"sync"
 	"time"
@@ -64,6 +66,14 @@ func (in *instance) GetLogs(tainr *types.Container, opts *LogOptions, stop chan 
 		// read log input (blocking read)
 		buf := make([]byte, 255)
 		n, err := stream.Read(buf)
+		// Read can return n > 0 even if err is returned, so we must always process the
+		// written bytes before looking at the error in order not to lose any data.
+		if n > 0 {
+			// write log to output
+			if n1, err1 := io.Copy(ioutil.NewRetryWriter(out), bytes.NewReader(buf[:n])); n1 == 0 || err1 != nil {
+				break
+			}
+		}
 		if err == io.EOF {
 			break
 		}
@@ -75,10 +85,6 @@ func (in *instance) GetLogs(tainr *types.Container, opts *LogOptions, stop chan 
 				break
 			}
 			continue
-		}
-		// write log to output
-		if n, err = out.Write(buf[:n]); n == 0 || err != nil {
-			break
 		}
 	}
 

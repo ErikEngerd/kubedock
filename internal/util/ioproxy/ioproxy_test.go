@@ -2,6 +2,7 @@ package ioproxy
 
 import (
 	"bytes"
+	"io"
 	"sync"
 	"testing"
 )
@@ -14,7 +15,11 @@ func (buf *ShortWriteBuffer) Write(b []byte) (int, error) {
 	if len(b) == 0 {
 		return buf.Buffer.Write(b)
 	}
-	return buf.Buffer.Write(b[:1])
+	n, err := buf.Buffer.Write(b[:1])
+	if n < len(b) {
+		err = io.ErrShortWrite
+	}
+	return n, err
 }
 
 func (buf *ShortWriteBuffer) Bytes() []byte {
